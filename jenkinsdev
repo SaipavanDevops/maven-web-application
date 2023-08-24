@@ -1,0 +1,52 @@
+node{
+    try{
+    def varo= tool name: 'maven 3.9.3'
+    stage('checkout'){
+        git branch: 'development', credentialsId: 'cb42895d-67de-4988-a0da-9fb1a04332f5', url: 'https://github.com/karthikputla341/maven-web-application.git'
+    }
+    stage('build'){
+        sh "${varo}/bin/mvn clean package"
+    }
+    stage('sonar'){
+        sh "${varo}/bin/mvn clean sonar:sonar"
+    }
+    stage('nexus'){
+        sh "${varo}/bin/mvn clean deploy"
+    }
+    stage('tomcat'){
+        sshagent(['a2899015-62ca-4d44-aefb-1f82d227d7fa']) {
+        sh "scp -o strictHostKeyChecking=no target/maven-web-application.war ec2-user@52.66.178.158:/opt/apache-tomcat-9.0.76/webapps/"
+}
+    }
+    }
+    catch (e){
+        currentBuild.result="FAILED"
+        throw e
+    }
+
+finally{
+    sendSlackNotifications(currentBuild.result)
+}
+}
+
+def sendSlackNotifications(String buildStatus= 'STARTED'){
+    buildStatus= buildStatus ?: 'SUCCESS'
+    
+    def colorname='RED'
+    def colorcode='#FF0000'
+    def subject="${buildStatus}: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'"
+    def summary="${subject} (${env.BUILD_URL})"
+    
+    if (buildStatus =='STARTED'){
+        color ='YELLOW'
+        colorcode='#FFFF00'
+        
+    }else if (buildStatus == 'SUCCESS'){
+        color = 'GREEN'
+        colorcode='#00FF00'
+    }else{
+        color ='RED'
+        color='#FF0000'
+    }
+    slackSend(color: colorcode, message: summary, channel: '#jenkins')
+}
